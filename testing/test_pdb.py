@@ -2118,3 +2118,18 @@ def test_signal_in_nonmain_thread_with_continue():
 42
 # c
 """)
+
+
+def test_orig_pdb():
+    def fn():
+        set_trace()
+
+    check(fn, """
+--Return-
+[NUM] > .*fn()
+-> set_trace()
+   5 frames hidden .*
+# import pdb
+# assert pdb.orig_set_trace is pdb.pdb.set_trace
+# c
+""")
