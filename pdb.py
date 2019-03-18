@@ -78,7 +78,7 @@ class DefaultConfig:
     use_pygments = True
     colorscheme = None
     use_terminal256formatter = None  # Defaults to `"256color" in $TERM`.
-    editor = '${EDITOR:-vi +%d %s}'  # use $EDITOR if set, else default to vi
+    editor = None  # Autodetected if unset.
     stdin_paste = None       # for emacs, you can use my bin/epaste script
     truncate_long_lines = True
     exec_if_unfocused = None
@@ -1003,7 +1003,7 @@ Frames can marked as hidden in the following ways:
 
         # Replace %s with filename, %d with lineno; %% becomes %.
         editcmd = re.sub("(?<!%)%s", filename, editor)
-        editcmd = re.sub("(?<!%)%d", lineno, editcmd)
+        editcmd = re.sub("(?<!%)%d", str(lineno), editcmd)
         return editcmd.replace("%%", "%")
 
     def _get_editor_cmd(self, filename, lineno):
@@ -1015,13 +1015,12 @@ Frames can marked as hidden in the following ways:
                 try:
                     from shutil import which
                 except ImportError:
-                    editor = "vi"
-                else:
-                    editor = which("vim")
+                    from distutils.spawn import find_executable as which
+                editor = which("vim")
+                if editor is None:
+                    editor = which("vi")
                     if editor is None:
-                        editor = which("vi")
-                        if editor is None:
-                            raise RuntimeError("Could not detect editor. Configure it or set $EDITOR.")  # noqa: E501
+                        raise RuntimeError("Could not detect editor. Configure it or set $EDITOR.")  # noqa: E501
         return self._format_editcmd(editor, filename, lineno)
 
     def do_edit(self, arg):
