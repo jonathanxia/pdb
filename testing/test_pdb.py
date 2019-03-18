@@ -58,8 +58,8 @@ class PdbTest(pdb.Pdb):
         # Do not install sigint_handler in do_continue by default.
         self.nosigint = nosigint
 
-    def _open_editor(self, editor, lineno, filename):
-        print("RUN %s +%d '%s'" % (editor, lineno, filename))
+    def _open_editor(self, editcmd):
+        print("RUN %s" % editcmd)
 
     def _open_stdin_paste(self, cmd, lineno, filename, text):
         print("RUN %s +%d" % (cmd, lineno))
@@ -1021,7 +1021,7 @@ def test_edit():
 -> return 42
    5 frames hidden .*
 # edit
-RUN emacs \+%d '%s'
+RUN emacs \+%d %s
 # c
 """ % (return42_lineno, filename))
 
@@ -1033,7 +1033,7 @@ RUN emacs \+%d '%s'
 [NUM] > .*bar()
 -> fn()
 # edit
-RUN emacs \+%d '%s'
+RUN emacs \+%d %s
 # c
 """ % (call_fn_lineno, filename))
 
@@ -1056,7 +1056,7 @@ def test_edit_obj():
 -> return 42
    5 frames hidden .*
 # edit bar
-RUN emacs \+%d '%s'
+RUN emacs \+%d %s
 # c
 """ % (bar_lineno, filename))
 
@@ -1072,17 +1072,17 @@ def test_edit_py_code_source():
     exec(src.compile(), dic)  # 8th line from the beginning of the function
     bar = dic['bar']
     src_compile_lineno = base_lineno + 8
-    #
+
     filename = os.path.abspath(__file__)
     if filename.endswith('.pyc'):
         filename = filename[:-1]
-    #
+
     check(bar, r"""
 [NUM] > .*bar()
 -> return 42
    5 frames hidden .*
 # edit bar
-RUN emacs \+%d '%s'
+RUN emacs \+%d %s
 # c
 """ % (src_compile_lineno, filename))
 

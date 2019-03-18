@@ -78,7 +78,7 @@ class DefaultConfig:
     use_pygments = True
     colorscheme = None
     use_terminal256formatter = None  # Defaults to `"256color" in $TERM`.
-    editor = '${EDITOR:-vi}'  # use $EDITOR if set, else default to vi
+    editor = '${EDITOR:-vi +%d %s}'  # use $EDITOR if set, else default to vi
     stdin_paste = None       # for emacs, you can use my bin/epaste script
     truncate_long_lines = True
     exec_if_unfocused = None
@@ -976,15 +976,53 @@ Frames can marked as hidden in the following ways:
         else:
             return get_terminal_size(fallback)
 
-    def _open_editor(self, editor, lineno, filename):
-        filename = filename.replace('"', '\\"')
-        os.system('%s +%d "%s"' % (editor, lineno, filename))
+    def _open_editor(self, editcmd):
+        """Extra method to allow for easy override in tests."""
+        subprocess.Popen(editcmd, shell=True).communicate()
 
     def _get_current_position(self):
         frame = self.curframe
         lineno = frame.f_lineno
         filename = os.path.abspath(frame.f_code.co_filename)
         return filename, lineno
+
+    def _format_editcmd(self, editor, filename, lineno):
+        try:
+            from shutil import quote
+        except ImportError:
+            from pipes import quote
+
+        filename = quote(filename)
+
+        if "{filename}" in editor:
+            return editor.format(filename=filename, lineno=lineno)
+
+        if "%s" not in editor:
+            # backward compatibility.
+            return "%s +%d %s" % (editor, lineno, filename)
+
+        # Replace %s with filename, %d with lineno; %% becomes %.
+        editcmd = re.sub("(?<!%)%s", filename, editor)
+        editcmd = re.sub("(?<!%)%d", lineno, editcmd)
+        return editcmd.replace("%%", "%")
+
+    def _get_editor_cmd(self, filename, lineno):
+        editor = self.config.editor
+        if editor is None:
+            try:
+                editor = os.environ["EDITOR"]
+            except KeyError:
+                try:
+                    from shutil import which
+                except ImportError:
+                    editor = "vi"
+                else:
+                    editor = which("vim")
+                    if editor is None:
+                        editor = which("vi")
+                        if editor is None:
+                            raise RuntimeError("Could not detect editor. Configure it or set $EDITOR.")  # noqa: E501
+        return self._format_editcmd(editor, filename, lineno)
 
     def do_edit(self, arg):
         "Open an editor visiting the current file at the current line"
@@ -1000,8 +1038,8 @@ Frames can marked as hidden in the following ways:
         if match:
             filename = match.group(1)
             lineno = int(match.group(2))
-        editor = self.config.editor
-        self._open_editor(editor, lineno, filename)
+
+        self._open_editor(self._get_editor_cmd(filename, lineno))
 
     do_ed = do_edit
 
