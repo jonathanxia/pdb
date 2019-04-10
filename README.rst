@@ -3,6 +3,13 @@
 pdb++, a drop-in replacement for pdb
 ====================================
 
+This is Jonathan Xia's fork of pdb. I personally like having the source
+code of the program I'm debugging on a different pane from the
+pdb prompt. You can open up a new tmux pane or a new terminal window,
+type ``tty``, and it will output the tty file name, e.g. ``/dev/pts/5``.
+Then, you can type ``sticky /dev/pts/5`` in the pdb prompt and
+the source code and watch variables will be printed on ``/dev/pts/5``.
+
 What is it?
 ------------
 
