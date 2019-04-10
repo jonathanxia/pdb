@@ -10,6 +10,7 @@ from __future__ import print_function
 
 import sys
 import os.path
+import os
 import inspect
 import code
 import codecs
@@ -167,6 +168,7 @@ class Pdb(pdb.Pdb, ConfigurableClass, object):
         self.show_hidden_frames = False
         self.hidden_frames = []
         self.stdout = self.ensure_file_can_write_unicode(self.stdout)
+        self.sticky_stdout = self.stdout
 
     def ensure_file_can_write_unicode(self, f):
         # Wrap with an encoder, but only if not already wrapped
@@ -769,6 +771,8 @@ Frames can marked as hidden in the following ways:
             print('** %s not in the display list **' % arg, file=self.stdout)
 
     def _print_if_sticky(self):
+        old_stdout = self.stdout
+        self.stdout = self.sticky_stdout
         if self.sticky:
             if self.first_time_sticky:
                 self.first_time_sticky = False
@@ -812,6 +816,7 @@ Frames can marked as hidden in the following ways:
                     s = '(unprintable return value)'
                 print(Color.set(self.config.line_number_color, ' return ' + s),
                       file=self.stdout)
+        self.stdout = old_stdout
 
     def do_sticky(self, arg):
         """
@@ -826,6 +831,12 @@ Frames can marked as hidden in the following ways:
         only lines within that range (extremes included) will be
         displayed.
         """
+        arg_list = arg.split()
+        if len(arg_list) == 1 or len(arg_list) == 3:
+            # We want to output to a tty
+            self.sticky_stdout = open(arg_list[0], 'w')
+            arg = " ".join(arg_list[1:])
+
         if arg:
             try:
                 start, end = map(int, arg.split())
@@ -865,6 +876,8 @@ Frames can marked as hidden in the following ways:
             self.print_stack_entry(self.stack[self.curindex])
 
     def preloop(self):
+        RED = "\033[1;31m"
+        RESET = "\033[0;0m"
         self._print_if_sticky()
         display_list = self._get_display_list()
         for expr, oldvalue in display_list.items():
@@ -874,8 +887,11 @@ Frames can marked as hidden in the following ways:
             # whose fields are changed to be displayed
             if newvalue is not oldvalue or newvalue != oldvalue:
                 display_list[expr] = newvalue
-                print('%s: %r --> %r' % (expr, oldvalue, newvalue),
-                      file=self.stdout)
+                print(RED + '%s: %r --> %r' % (expr, oldvalue, newvalue), RESET,
+                      file=self.sticky_stdout)
+            else:
+                print('%s: %r' % (expr, oldvalue),
+                      file=self.sticky_stdout)
 
     def _get_position_of_arg(self, arg):
         try:
@@ -962,7 +978,8 @@ Frames can marked as hidden in the following ways:
                 import termios
                 import fcntl
                 import struct
-                call = fcntl.ioctl(0, termios.TIOCGWINSZ, "\x00"*8)
+                fd = self.stdout.fileno()
+                call = fcntl.ioctl(fd, termios.TIOCGWINSZ, "\x00"*8)
                 height, width = struct.unpack("hhhh", call)[:2]
             except (SystemExit, KeyboardInterrupt):
                 raise
@@ -974,7 +991,19 @@ Frames can marked as hidden in the following ways:
             height = height if height != 0 else fallback[1]
             return width, height
         else:
-            return get_terminal_size(fallback)
+            # We are not going to care about the os environment variable
+            # of LINES and COLUMNS because it refers to the wrong tty
+            try:
+                size = os.get_terminal_size(self.stdout.fileno())
+            except (AttributeError, ValueError, OSError):
+                # stdout is None, closed, detached, or not a terminal, or
+                # os.get_terminal_size() is unsupported
+                size = os.terminal_size(fallback)
+            columns = size.columns
+            lines = size.lines
+
+            return os.terminal_size((columns, lines))
+
 
     def _open_editor(self, editor, lineno, filename):
         filename = filename.replace('"', '\\"')
